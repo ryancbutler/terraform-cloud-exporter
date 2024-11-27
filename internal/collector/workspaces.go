@@ -28,7 +28,7 @@ var (
 	WorkspacesInfo = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
 		"Information about existing workspaces",
-		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "current_run", "current_run_status", "current_run_created_at"}, nil,
+		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at"}, nil,
 	)
 )
 
@@ -79,6 +79,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			w.Environment,
+			fmt.Sprintf("%t", w.Locked),
 			getCurrentRunID(w.CurrentRun),
 			getCurrentRunStatus(w.CurrentRun),
 			getCurrentRunCreatedAt(w.CurrentRun),
@@ -144,3 +145,11 @@ func getCurrentRunCreatedAt(r *tfe.Run) string {
 
 	return r.CreatedAt.String()
 }
+
+// func getTags(r *tfe.Run) []string {
+// 	if r == nil {
+// 		return []
+// 	}
+
+// 	return []r.TagNames.String()
+// }
