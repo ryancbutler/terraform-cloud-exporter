@@ -6,9 +6,8 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/kaizendorks/terraform-cloud-exporter/internal/setup"
-
 	tfe "github.com/hashicorp/go-tfe"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -28,7 +27,7 @@ var (
 	WorkspacesInfo = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
 		"Information about existing workspaces",
-		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "current_run", "current_run_status", "current_run_created_at"}, nil,
+		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags"}, nil,
 	)
 )
 
@@ -55,19 +54,20 @@ func (ScrapeWorkspaces) Version() string {
 }
 
 func getWorkspacesListPage(ctx context.Context, page int, organization string, config *setup.Config, ch chan<- prometheus.Metric) error {
-	include := "current_run"
-	workspacesList, err := config.Client.Workspaces.List(ctx, organization, tfe.WorkspaceListOptions{
+	// include := []tfe.WorkspaceInclude{tfe.WorkspaceIncludeCurrentRun}
+	workspacesList, err := config.Client.Workspaces.List(ctx, organization, &tfe.WorkspaceListOptions{
 		ListOptions: tfe.ListOptions{
 			PageSize:   pageSize,
 			PageNumber: page,
 		},
-		Include: &include,
+		// Include: include,
 	})
 	if err != nil {
 		return fmt.Errorf("%v, (organization=%s, page=%d)", err, organization, page)
 	}
 
 	for _, w := range workspacesList.Items {
+
 		select {
 		case ch <- prometheus.MustNewConstMetric(
 			WorkspacesInfo,
@@ -79,6 +79,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			w.Environment,
+			fmt.Sprintf("%t", w.Locked),
 			getCurrentRunID(w.CurrentRun),
 			getCurrentRunStatus(w.CurrentRun),
 			getCurrentRunCreatedAt(w.CurrentRun),
@@ -144,3 +145,24 @@ func getCurrentRunCreatedAt(r *tfe.Run) string {
 
 	return r.CreatedAt.String()
 }
+
+// func (s *workspaces) ListTags(ctx context.Context, workspaceID string, options *WorkspaceTagListOptions) (*TagList, error) {
+// 	if !validStringID(&workspaceID) {
+// 		return nil, ErrInvalidWorkspaceID
+// 	}
+
+// 	u := fmt.Sprintf("workspaces/%s/relationships/tags", url.PathEscape(workspaceID))
+
+// 	req, err := s.client.NewRequest("GET", u, options)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	tl := &TagList{}
+// 	err = req.Do(ctx, tl)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return tl, nil
+// }

@@ -6,10 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kaizendorks/terraform-cloud-exporter/internal/setup"
-
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
 
 	tfe "github.com/hashicorp/go-tfe"
 
@@ -81,7 +80,7 @@ func (e *Exporter) scrape(ctx context.Context, ch chan<- prometheus.Metric) {
 	e.metrics.TotalScrapes.Inc()
 	if len(e.config.Organizations) == 0 {
 		// Note: At some point this will return a paginated response.
-		oo, err := e.config.Client.Organizations.List(ctx, tfe.OrganizationListOptions{})
+		oo, err := e.config.Client.Organizations.List(ctx, &tfe.OrganizationListOptions{})
 		if err != nil {
 			e.metrics.Error.Set(1)
 			level.Error(e.logger).Log("msg", "Unable to List Organizations", "err", err)

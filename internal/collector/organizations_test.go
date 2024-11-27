@@ -6,9 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kaizendorks/terraform-cloud-exporter/internal/setup"
-
 	tfe "github.com/hashicorp/go-tfe"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
