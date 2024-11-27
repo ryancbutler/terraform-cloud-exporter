@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	tfe "github.com/hashicorp/go-tfe"
-	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"

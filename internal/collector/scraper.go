@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup"
 )
 
 // Scraper is minimal interface that let's you add new prometheus metrics to tf_exporter.

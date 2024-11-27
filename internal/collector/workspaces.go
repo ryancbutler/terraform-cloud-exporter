@@ -3,11 +3,12 @@ package collector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 
 	tfe "github.com/hashicorp/go-tfe"
-	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -19,7 +20,7 @@ const (
 	// TODO: We might want to allow the user to control pageSize via cli/config
 	// 		* This could be handy for users hitting API rate limits (30 per sec).
 	// 		* Investigate performance of (100 requests for 1 item) vs (1 request for 100 items).
-	pageSize = 20
+	pageSize = 100
 )
 
 // Metric descriptors.
@@ -27,7 +28,7 @@ var (
 	WorkspacesInfo = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
 		"Information about existing workspaces",
-		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags"}, nil,
+		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags", "project", "plan_duration_avg", "run_failures", "run_counts", "resource_count"}, nil,
 	)
 )
 
@@ -67,7 +68,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 	}
 
 	for _, w := range workspacesList.Items {
-
+		// level.Info(config.Logger).Log("msg", "Dump Cost", w.CurrentRun.CostEstimate)
 		select {
 		case ch <- prometheus.MustNewConstMetric(
 			WorkspacesInfo,
@@ -83,6 +84,12 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunID(w.CurrentRun),
 			getCurrentRunStatus(w.CurrentRun),
 			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentTags(w.TagNames),
+			w.Project.Name,
+			w.PlanDurationAverage.String(),
+			fmt.Sprintf("%d", w.RunFailures),
+			fmt.Sprintf("%d", w.RunsCount),
+			fmt.Sprintf("%d", w.ResourceCount),
 		):
 		case <-ctx.Done():
 			return ctx.Err()
@@ -100,7 +107,7 @@ func (ScrapeWorkspaces) Scrape(ctx context.Context, config *setup.Config, ch cha
 		g.Go(func() error {
 			// TODO: Dummy list call to get the number of workspaces.
 			//       Investigate if there is a better way to get the workspace count.
-			workspacesList, err := config.Client.Workspaces.List(ctx, name, tfe.WorkspaceListOptions{
+			workspacesList, err := config.Client.Workspaces.List(ctx, name, &tfe.WorkspaceListOptions{
 				ListOptions: tfe.ListOptions{PageSize: pageSize},
 			})
 			if err != nil {
@@ -144,6 +151,21 @@ func getCurrentRunCreatedAt(r *tfe.Run) string {
 	}
 
 	return r.CreatedAt.String()
+}
+
+// func getCostEstimate(r *tfe.Run) string {
+// 	if !isNilFixed(r.CostEstimate) {
+// 		return "na"
+// 	}
+
+// 	return "stupid"
+// }
+
+func getCurrentTags(r []string) string {
+	if r == nil {
+		return "na"
+	}
+	return strings.Join(r, ";")
 }
 
 // func (s *workspaces) ListTags(ctx context.Context, workspaceID string, options *WorkspaceTagListOptions) (*TagList, error) {

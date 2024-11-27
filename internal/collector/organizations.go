@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup"
 
 	"github.com/prometheus/client_golang/prometheus"
 )

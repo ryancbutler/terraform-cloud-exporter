@@ -8,11 +8,10 @@ import (
 	"strconv"
 	"time"
 
-	//"github.com/kaizendorks/terraform-cloud-exporter/internal/collector"
+	"github.com/go-kit/log/level"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/collector"
 
-	"github.com/go-kit/kit/log/level"
-	"github.com/kaizendorks/terraform-cloud-exporter/internal/collector"
-	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup@dev"
+	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
