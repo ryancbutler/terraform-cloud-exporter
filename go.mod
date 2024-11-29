@@ -16,4 +16,4 @@ require (
 	golang.org/x/time v0.8.0 // indirect
 )
 
-replace github.com/ryancbutler/terraform-cloud-exporter => /mnt/c/Users/ryan.butler/Gitprojects/terraform-cloud-exporter
+// replace github.com/ryancbutler/terraform-cloud-exporter => /mnt/c/Users/ryan.butler/Gitprojects/terraform-cloud-exporter
