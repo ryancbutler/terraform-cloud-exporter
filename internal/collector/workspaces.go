@@ -69,6 +69,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			PageSize:   pageSize,
 			PageNumber: page,
 		},
+		Include: []tfe.WSIncludeOpt{"organization", "current_run"},
 		// Include: []tfe.WSIncludeOpt{
 		// 	"project",
 		// 	"organization",
