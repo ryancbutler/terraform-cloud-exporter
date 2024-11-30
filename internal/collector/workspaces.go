@@ -25,11 +25,19 @@ const (
 
 // Metric descriptors.
 var (
-	WorkspacesInfo = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
-		"Information about existing workspaces",
-		[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags", "project", "plan_duration_avg", "run_failures", "run_counts", "resource_count"}, nil,
-	)
+	// WorkspacesInfo = prometheus.NewDesc(
+	// 	prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
+	// 	"Information about existing workspaces",
+	// 	[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags", "project", "plan_duration_avg", "run_failures", "run_counts", "resource_count"}, nil,
+	// )
+
+	resourceCount = prometheus.NewDesc("resource_count", "Total number of managed resources", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	failCount     = prometheus.NewDesc("run_failure_count", "Total number of failed runs", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	runCount      = prometheus.NewDesc("run_count", "Total number of runs", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	wsLocked      = prometheus.NewDesc("locked_count", "Workspace Locked", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id"}, nil)
+	policyFailure = prometheus.NewDesc("policy_check_failures", "Total policy failures", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	applyDuration = prometheus.NewDesc("apply_duration", "Apply duration average", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	planDuration  = prometheus.NewDesc("plan_duration", "Plan duration average", []string{"ws_id", "tags", "ws_name", "project", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
 )
 
 // ScrapeWorkspaces scrapes metrics about the workspaces.
@@ -68,34 +76,172 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 	}
 
 	for _, w := range workspacesList.Items {
-		// level.Info(config.Logger).Log("msg", "Dump Cost", w.CurrentRun.CostEstimate)
-		select {
-		case ch <- prometheus.MustNewConstMetric(
-			WorkspacesInfo,
+		// 	select {
+		// 	case ch <- prometheus.MustNewConstMetric(
+		// 		WorkspacesInfo,
+		// 		prometheus.GaugeValue,
+		// 		1,
+		// 		w.ID,
+		// 		w.Name,
+		// 		w.Organization.Name,
+		// 		w.TerraformVersion,
+		// 		w.CreatedAt.String(),
+		// 		w.Environment,
+		// 		fmt.Sprintf("%t", w.Locked),
+		// 		getCurrentRunID(w.CurrentRun),
+		// 		getCurrentRunStatus(w.CurrentRun),
+		// 		getCurrentRunCreatedAt(w.CurrentRun),
+		// 		getCurrentTags(w.TagNames),
+		// 		w.Project.Name,
+		// 		w.PlanDurationAverage.String(),
+		// 		fmt.Sprintf("%d", w.RunFailures),
+		// 		fmt.Sprintf("%d", w.RunsCount),
+		// 		fmt.Sprintf("%d", w.ResourceCount),
+		// 	):
+		// 	case <-ctx.Done():
+		// 		return ctx.Err()
+
+		// 	}
+		// 	select {
+		// 	case ch <- prometheus.MustNewConstMetric(
+		// 		resourceCount,
+		// 		prometheus.GaugeValue,
+		// 		float64(w.RunsCount),
+		// 		w.ID,
+		// 	):
+		// 	case <-ctx.Done():
+		// 		return ctx.Err()
+
+		// 	}
+
+		// }
+		// ch <- prometheus.MustNewConstMetric(
+		// 	WorkspacesInfo,
+		// 	prometheus.GaugeValue,
+		// 	1,
+		// 	w.ID,
+		// 	w.Name,
+		// 	w.Organization.Name,
+		// 	w.TerraformVersion,
+		// 	w.CreatedAt.String(),
+		// 	w.Environment,
+		// 	fmt.Sprintf("%t", w.Locked),
+		// 	getCurrentRunID(w.CurrentRun),
+		// 	getCurrentRunStatus(w.CurrentRun),
+		// 	getCurrentRunCreatedAt(w.CurrentRun),
+		// 	getCurrentTags(w.TagNames),
+		// 	w.Project.Name,
+		// 	w.PlanDurationAverage.String(),
+		// 	fmt.Sprintf("%d", w.RunFailures),
+		// 	fmt.Sprintf("%d", w.RunsCount),
+		// 	fmt.Sprintf("%d", w.ResourceCount),
+		// )
+		ch <- prometheus.MustNewConstMetric(
+			resourceCount,
 			prometheus.GaugeValue,
-			1,
+			float64(w.ResourceCount), // Main metric
 			w.ID,
+			getCurrentTags(w.TagNames),
 			w.Name,
-			w.Organization.Name,
+			w.Project.ID,
 			w.TerraformVersion,
 			w.CreatedAt.String(),
-			w.Environment,
-			fmt.Sprintf("%t", w.Locked),
-			getCurrentRunID(w.CurrentRun),
 			getCurrentRunStatus(w.CurrentRun),
 			getCurrentRunCreatedAt(w.CurrentRun),
-			getCurrentTags(w.TagNames),
-			w.Project.Name,
-			w.PlanDurationAverage.String(),
-			fmt.Sprintf("%d", w.RunFailures),
-			fmt.Sprintf("%d", w.RunsCount),
-			fmt.Sprintf("%d", w.ResourceCount),
-		):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+		)
 
+		ch <- prometheus.MustNewConstMetric(
+			failCount,
+			prometheus.GaugeValue,
+			float64(w.RunFailures), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			w.Name,
+			w.Project.ID,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			runCount,
+			prometheus.GaugeValue,
+			float64(w.RunsCount), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			w.Name,
+			w.Project.ID,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			wsLocked,
+			prometheus.GaugeValue,
+			convertBool(w.Locked), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			w.Name,
+			w.Project.ID,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			policyFailure,
+			prometheus.GaugeValue,
+			float64(w.PolicyCheckFailures), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			w.Name,
+			w.Project.ID,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			applyDuration,
+			prometheus.GaugeValue,
+			float64(w.ApplyDurationAverage.Seconds()), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			w.Name,
+			w.Project.ID,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+		)
+		ch <- prometheus.MustNewConstMetric(
+			planDuration,
+			prometheus.GaugeValue,
+			float64(w.PlanDurationAverage.Seconds()), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			w.Name,
+			w.Project.ID,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+		)
+	}
 	return nil
 }
 
@@ -153,38 +299,16 @@ func getCurrentRunCreatedAt(r *tfe.Run) string {
 	return r.CreatedAt.String()
 }
 
-// func getCostEstimate(r *tfe.Run) string {
-// 	if !isNilFixed(r.CostEstimate) {
-// 		return "na"
-// 	}
-
-// 	return "stupid"
-// }
-
 func getCurrentTags(r []string) string {
-	if r == nil {
+	if len(r) == 0 {
 		return "na"
 	}
 	return strings.Join(r, ";")
 }
 
-// func (s *workspaces) ListTags(ctx context.Context, workspaceID string, options *WorkspaceTagListOptions) (*TagList, error) {
-// 	if !validStringID(&workspaceID) {
-// 		return nil, ErrInvalidWorkspaceID
-// 	}
-
-// 	u := fmt.Sprintf("workspaces/%s/relationships/tags", url.PathEscape(workspaceID))
-
-// 	req, err := s.client.NewRequest("GET", u, options)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	tl := &TagList{}
-// 	err = req.Do(ctx, tl)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return tl, nil
-// }
+func convertBool(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
+}
