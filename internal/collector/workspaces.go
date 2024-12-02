@@ -10,6 +10,10 @@ import (
 	tfe "github.com/hashicorp/go-tfe"
 	"github.com/ryancbutler/terraform-cloud-exporter/internal/setup"
 
+	"maps"
+
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -36,8 +40,8 @@ var (
 	runCount      = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "run_count"), "Total number of runs", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
 	wsLocked      = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "locked_count"), "Workspace Locked", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id"}, nil)
 	policyFailure = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "policy_check_failures"), "Total policy failures", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	applyDuration = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "apply_duration"), "Apply duration average", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	planDuration  = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "plan_duration"), "Plan duration average", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	applyDuration = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "apply_duration_seconds"), "Apply duration average", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	planDuration  = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "plan_duration_seconds"), "Plan duration average", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
 )
 
 // ScrapeWorkspaces scrapes metrics about the workspaces.
@@ -62,7 +66,7 @@ func (ScrapeWorkspaces) Version() string {
 	return "v2"
 }
 
-func getWorkspacesListPage(ctx context.Context, page int, organization string, config *setup.Config, ch chan<- prometheus.Metric) error {
+func getWorkspacesListPage(ctx context.Context, page int, organization string, config *setup.Config, ch chan<- prometheus.Metric, projects map[string]string) error {
 	// include := []tfe.WorkspaceInclude{tfe.WorkspaceIncludeCurrentRun}
 	workspacesList, err := config.Client.Workspaces.List(ctx, organization, &tfe.WorkspaceListOptions{
 		ListOptions: tfe.ListOptions{
@@ -70,6 +74,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			PageNumber: page,
 		},
 		Include: []tfe.WSIncludeOpt{"organization", "current_run"},
+
+		//project seems to cause a panic
 		// Include: []tfe.WSIncludeOpt{
 		// 	"project",
 		// 	"organization",
@@ -90,78 +96,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 	}
 
 	for _, w := range workspacesList.Items {
-		// 	select {
-		// 	case ch <- prometheus.MustNewConstMetric(
-		// 		WorkspacesInfo,
-		// 		prometheus.GaugeValue,
-		// 		1,
-		// 		w.ID,
-		// 		w.Name,
-		// 		w.Organization.Name,
-		// 		w.TerraformVersion,
-		// 		w.CreatedAt.String(),
-		// 		w.Environment,
-		// 		fmt.Sprintf("%t", w.Locked),
-		// 		getCurrentRunID(w.CurrentRun),
-		// 		getCurrentRunStatus(w.CurrentRun),
-		// 		getCurrentRunCreatedAt(w.CurrentRun),
-		// 		getCurrentTags(w.TagNames),
-		// 		w.Project.Name,
-		// 		w.PlanDurationAverage.String(),
-		// 		fmt.Sprintf("%d", w.RunFailures),
-		// 		fmt.Sprintf("%d", w.RunsCount),
-		// 		fmt.Sprintf("%d", w.ResourceCount),
-		// 	):
-		// 	case <-ctx.Done():
-		// 		return ctx.Err()
 
-		// 	}
-		// 	select {
-		// 	case ch <- prometheus.MustNewConstMetric(
-		// 		resourceCount,
-		// 		prometheus.GaugeValue,
-		// 		float64(w.RunsCount),
-		// 		w.ID,
-		// 	):
-		// 	case <-ctx.Done():
-		// 		return ctx.Err()
-
-		// 	}
-
-		// }
-		// ch <- prometheus.MustNewConstMetric(
-		// 	WorkspacesInfo,
-		// 	prometheus.GaugeValue,
-		// 	1,
-		// 	w.ID,
-		// 	w.Name,
-		// 	w.Organization.Name,
-		// 	w.TerraformVersion,
-		// 	w.CreatedAt.String(),
-		// 	w.Environment,
-		// 	fmt.Sprintf("%t", w.Locked),
-		// 	getCurrentRunID(w.CurrentRun),
-		// 	getCurrentRunStatus(w.CurrentRun),
-		// 	getCurrentRunCreatedAt(w.CurrentRun),
-		// 	getCurrentTags(w.TagNames),
-		// 	w.Project.Name,
-		// 	w.PlanDurationAverage.String(),
-		// 	fmt.Sprintf("%d", w.RunFailures),
-		// 	fmt.Sprintf("%d", w.RunsCount),
-		// 	fmt.Sprintf("%d", w.ResourceCount),
-		// )
-		project, err := config.Client.Projects.Read(ctx, w.Project.ID)
-		if err != nil {
-			return fmt.Errorf("%v, (organization=%s, page=%d)", err, organization, page)
-		}
-		// run, err := config.Client.Runs.Read(ctx, w.CurrentRun.ID)
-		// runStatus := "na"
-		// if err != nil {
-		// 	//return fmt.Errorf("%v, (organization=%s, page=%d)", err, organization, page)
-		// 	runStatus = "na"
-		// } else {
-		// 	runStatus = string(run.Status)
-		// }
 		ch <- prometheus.MustNewConstMetric(
 			resourceCount,
 			prometheus.GaugeValue,
@@ -170,7 +105,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -187,7 +122,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -203,7 +138,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -219,7 +154,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -234,7 +169,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -245,12 +180,12 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 		ch <- prometheus.MustNewConstMetric(
 			applyDuration,
 			prometheus.GaugeValue,
-			float64(w.ApplyDurationAverage.Seconds()), // Main metric
+			float64((w.ApplyDurationAverage * time.Millisecond).Seconds()), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -261,12 +196,12 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 		ch <- prometheus.MustNewConstMetric(
 			planDuration,
 			prometheus.GaugeValue,
-			float64(w.PlanDurationAverage.Seconds()), // Main metric
+			float64((w.PlanDurationAverage * time.Millisecond).Seconds()), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
 			w.Name,
 			w.Project.ID,
-			project.Name,
+			projects[w.Project.ID],
 			w.TerraformVersion,
 			w.CreatedAt.String(),
 			getCurrentRunStatus(w.CurrentRun),
@@ -293,10 +228,12 @@ func (ScrapeWorkspaces) Scrape(ctx context.Context, config *setup.Config, ch cha
 				return fmt.Errorf("%v, organization=%s", err, name)
 			}
 
+			projectMap := getProjectList(ctx, name, config)
+
 			// TODO: We should be able to do some of this work in parallel.
 			//       Investigate potential complications before enabling it.
 			for i := 1; i <= workspacesList.Pagination.TotalPages; i++ {
-				if err := getWorkspacesListPage(ctx, i, name, config, ch); err != nil {
+				if err := getWorkspacesListPage(ctx, i, name, config, ch, projectMap); err != nil {
 					return err
 				}
 			}
@@ -344,4 +281,42 @@ func convertBool(b bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func getProjectList(ctx context.Context, organization string, config *setup.Config) map[string]string {
+
+	projectsList, err := config.Client.Projects.List(ctx, organization, &tfe.ProjectListOptions{
+		ListOptions: tfe.ListOptions{PageSize: pageSize},
+	})
+	if err != nil {
+		fmt.Printf("Error: %v, organization=%s\n", err, organization)
+		return map[string]string{}
+	}
+
+	m := make(map[string]string)
+	for i := 1; i <= projectsList.Pagination.TotalPages; i++ {
+		projectsPage := getProjectsListPage(ctx, i, organization, config)
+		//Copy the map to the main map
+		maps.Copy(m, projectsPage)
+	}
+
+	return m
+}
+
+func getProjectsListPage(ctx context.Context, page int, organization string, config *setup.Config) map[string]string {
+	projectsList, err := config.Client.Projects.List(ctx, organization, &tfe.ProjectListOptions{
+		ListOptions: tfe.ListOptions{
+			PageSize:   pageSize,
+			PageNumber: page,
+		},
+	})
+	if err != nil {
+		fmt.Printf("Error: %v, organization=%s\n", err, organization)
+	}
+	m := make(map[string]string)
+	for _, w := range projectsList.Items {
+		m[w.ID] = w.Name
+	}
+
+	return m
 }
