@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sync/errgroup"
@@ -29,19 +30,21 @@ const (
 
 // Metric descriptors.
 var (
-	// WorkspacesInfo = prometheus.NewDesc(
-	// 	prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
-	// 	"Information about existing workspaces",
-	// 	[]string{"id", "name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags", "project", "plan_duration_avg", "run_failures", "run_counts", "resource_count"}, nil,
-	// )
+	WorkspacesInfo = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, workspacesSubsystem, "info"),
+		"Information about existing workspaces",
+		[]string{"ws_id", "ws_name", "organization", "terraform_version", "created_at", "environment", "locked", "current_run", "current_run_status", "current_run_created_at", "tags", "tf_environment", "aws_account_id", "project_id", "project_name"}, nil,
+	)
 
-	resourceCount = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "resource_count"), "Total number of managed resources", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	failCount     = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "run_failure_count"), "Total number of failed runs", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	runCount      = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "run_count"), "Total number of runs", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	wsLocked      = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "locked_count"), "Workspace Locked", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id"}, nil)
-	policyFailure = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "policy_check_failures"), "Total policy failures", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	applyDuration = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "apply_duration_seconds"), "Apply duration average", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
-	planDuration  = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "plan_duration_seconds"), "Plan duration average", []string{"ws_id", "tags", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked"}, nil)
+	resourceCount    = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "resource_count"), "Total number of managed resources", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	failCount        = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "run_failure_count"), "Total number of failed runs", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	runCount         = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "run_count"), "Total number of runs", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	wsLocked         = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "locked_count"), "Workspace Locked", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	policyFailure    = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "policy_check_failures"), "Total policy failures", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	applyDuration    = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "apply_duration_seconds"), "Apply duration average", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	planDuration     = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "plan_duration_seconds"), "Plan duration average", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	costDelta        = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "run_cost_delta"), "Current run cost delta", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
+	daysSinceLastRun = prometheus.NewDesc(prometheus.BuildFQName(namespace, workspacesSubsystem, "days_since_last_run"), "Number of days since last run", []string{"ws_id", "tags", "tf_environment", "aws_account_id", "ws_name", "project_id", "project_name", "tf_version", "created_at", "current_run_status", "current_run_created_at", "current_run_id", "locked", "organization"}, nil)
 )
 
 // ScrapeWorkspaces scrapes metrics about the workspaces.
@@ -98,11 +101,34 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 	for _, w := range workspacesList.Items {
 
 		ch <- prometheus.MustNewConstMetric(
+			WorkspacesInfo,
+			prometheus.GaugeValue,
+			1,
+			w.ID,
+			w.Name,
+			w.Organization.Name,
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			w.Environment,
+			fmt.Sprintf("%t", w.Locked),
+			getCurrentRunID(w.CurrentRun),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
+			w.Project.ID,
+			projects[w.Project.ID],
+		)
+
+		ch <- prometheus.MustNewConstMetric(
 			resourceCount,
 			prometheus.GaugeValue,
 			float64(w.ResourceCount), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -112,6 +138,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
 			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 
 		ch <- prometheus.MustNewConstMetric(
@@ -120,6 +147,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			float64(w.RunFailures), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -129,6 +158,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
 			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			runCount,
@@ -136,6 +166,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			float64(w.RunsCount), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -145,6 +177,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
 			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			wsLocked,
@@ -152,6 +185,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			convertBool(w.Locked), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -160,6 +195,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunStatus(w.CurrentRun),
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			policyFailure,
@@ -167,6 +204,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			float64(w.PolicyCheckFailures), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -176,6 +215,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
 			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			applyDuration,
@@ -183,6 +223,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			float64((w.ApplyDurationAverage * time.Millisecond).Seconds()), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -192,6 +234,7 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
 			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 		ch <- prometheus.MustNewConstMetric(
 			planDuration,
@@ -199,6 +242,8 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			float64((w.PlanDurationAverage * time.Millisecond).Seconds()), // Main metric
 			w.ID,
 			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
 			w.Name,
 			w.Project.ID,
 			projects[w.Project.ID],
@@ -208,6 +253,45 @@ func getWorkspacesListPage(ctx context.Context, page int, organization string, c
 			getCurrentRunCreatedAt(w.CurrentRun),
 			getCurrentRunID(w.CurrentRun),
 			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			costDelta,
+			prometheus.GaugeValue,
+			getCurrentCostDelta(w.CurrentRun), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
+			w.Name,
+			w.Project.ID,
+			projects[w.Project.ID],
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			daysSinceLastRun,
+			prometheus.GaugeValue,
+			getSinceLastRun(w.CurrentRun), // Main metric
+			w.ID,
+			getCurrentTags(w.TagNames),
+			getTagValue(w.TagNames, "environment:"),
+			getTagValue(w.TagNames, "aws_account_id:"),
+			w.Name,
+			w.Project.ID,
+			projects[w.Project.ID],
+			w.TerraformVersion,
+			w.CreatedAt.String(),
+			getCurrentRunStatus(w.CurrentRun),
+			getCurrentRunCreatedAt(w.CurrentRun),
+			getCurrentRunID(w.CurrentRun),
+			fmt.Sprintf("%t", w.Locked),
+			w.Organization.Name,
 		)
 	}
 	return nil
@@ -261,6 +345,18 @@ func getCurrentRunStatus(r *tfe.Run) string {
 	return string(r.Status)
 }
 
+func getCurrentCostDelta(r *tfe.Run) float64 {
+	if r == nil {
+		return 0
+	}
+	newStr := strings.ReplaceAll(r.CostEstimate.DeltaMonthlyCost, "$", "")
+	floatVal, err := strconv.ParseFloat(newStr, 64)
+	if err != nil {
+		return 0
+	}
+	return floatVal
+}
+
 func getCurrentRunCreatedAt(r *tfe.Run) string {
 	if r == nil {
 		return "na"
@@ -269,11 +365,37 @@ func getCurrentRunCreatedAt(r *tfe.Run) string {
 	return r.CreatedAt.String()
 }
 
+func getSinceLastRun(r *tfe.Run) float64 {
+	if r == nil {
+		return 0
+	}
+	date := time.Now()
+	diff := date.Sub(r.CreatedAt)
+	days := int(diff.Hours() / 24)
+	return float64(days)
+}
+
 func getCurrentTags(r []string) string {
 	if len(r) == 0 {
 		return "na"
 	}
 	return strings.Join(r, ";")
+}
+
+func getTagValue(r []string, s string) string {
+	if len(r) == 0 {
+		return "na"
+	}
+
+	for _, tag := range r {
+		if strings.HasPrefix(tag, s) {
+			return strings.TrimLeft(tag, s)
+		}
+
+	}
+
+	return "na"
+
 }
 
 func convertBool(b bool) float64 {
