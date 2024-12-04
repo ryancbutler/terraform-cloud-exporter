@@ -54,6 +54,7 @@ func getUsersListPage(ctx context.Context, page int, organization string, config
 			PageSize:   pageSize,
 			PageNumber: page,
 		},
+		Include: []tfe.OrgMembershipIncludeOpt{"user"},
 	})
 
 	if err != nil {
@@ -87,8 +88,8 @@ func (ScrapeUsers) Scrape(ctx context.Context, config *setup.Config, ch chan<- p
 			usersList, err := config.Client.OrganizationMemberships.List(ctx, name, &tfe.OrganizationMembershipListOptions{
 				ListOptions: tfe.ListOptions{
 					PageSize: pageSize,
-				}},
-			)
+				},
+			})
 
 			if err != nil {
 				return fmt.Errorf("%v, organization=%s", err, name)
